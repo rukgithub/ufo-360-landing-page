@@ -40,7 +40,7 @@
     </div>
     <!-- Three.js libraries -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/PointerLockControls.js"></script>
+    <!-- PointerLockControls removed; custom implementation below -->
     <script>
     // Create scene, camera and renderer
     const scene = new THREE.Scene();
@@ -113,20 +113,40 @@
     grid.position.y = 0;
     scene.add(grid);
 
-    // Set up pointer‑lock controls for first‑person navigation
-    const controls = new THREE.PointerLockControls(camera, document.body);
-    document.body.addEventListener('click', () => {
-        controls.lock();
-    });
-
     // Movement flags
     let moveForward = false;
     let moveBackward = false;
     let moveLeft = false;
     let moveRight = false;
 
+    // Variables to track the camera's yaw (horizontal rotation) and pitch (vertical rotation)
+    let yaw = 0;
+    let pitch = 0;
+    let isPointerLocked = false;
+
+    // Request pointer lock when the user clicks anywhere on the page
+    document.body.addEventListener('click', () => {
+        document.body.requestPointerLock();
+    });
+
+    // Listen for pointer lock changes
+    document.addEventListener('pointerlockchange', () => {
+        isPointerLocked = document.pointerLockElement === document.body;
+    });
+
+    // Update yaw and pitch when the mouse moves
+    document.addEventListener('mousemove', (event) => {
+        if (!isPointerLocked) return;
+        const sensitivity = 0.002;
+        yaw   -= event.movementX * sensitivity;
+        pitch -= event.movementY * sensitivity;
+        const piHalf = Math.PI / 2;
+        // Clamp pitch to avoid flipping
+        pitch = Math.max(-piHalf, Math.min(piHalf, pitch));
+    });
+
     // Keyboard input handlers
-    function onKeyDown(event) {
+    document.addEventListener('keydown', (event) => {
         switch (event.code) {
             case 'ArrowUp':
             case 'KeyW':
@@ -145,8 +165,8 @@
                 moveRight = true;
                 break;
         }
-    }
-    function onKeyUp(event) {
+    });
+    document.addEventListener('keyup', (event) => {
         switch (event.code) {
             case 'ArrowUp':
             case 'KeyW':
@@ -165,35 +185,42 @@
                 moveRight = false;
                 break;
         }
-    }
+    });
 
-    document.addEventListener('keydown', onKeyDown);
-    document.addEventListener('keyup', onKeyUp);
-
-    // Physics variables for smooth movement
-    const velocity = new THREE.Vector3();
-    const direction = new THREE.Vector3();
+    // Clock for delta time
     const clock = new THREE.Clock();
 
     function animate() {
         requestAnimationFrame(animate);
         const delta = clock.getDelta();
+        const speed = 8; // movement speed units per second
 
-        // Damp velocities
-        velocity.x -= velocity.x * 10.0 * delta;
-        velocity.z -= velocity.z * 10.0 * delta;
+        // Apply rotation to the camera
+        camera.rotation.set(pitch, yaw, 0);
 
-        // Determine direction of movement
-        direction.z = Number(moveForward) - Number(moveBackward);
-        direction.x = Number(moveRight) - Number(moveLeft);
-        direction.normalize();
+        // Calculate forward and right vectors based on current yaw
+        const forwardX = Math.sin(yaw);
+        const forwardZ = Math.cos(yaw);
+        const rightX   = Math.cos(yaw);
+        const rightZ   = -Math.sin(yaw);
 
-        if (moveForward || moveBackward) velocity.z -= direction.z * 40.0 * delta;
-        if (moveLeft || moveRight) velocity.x -= direction.x * 40.0 * delta;
-
-        // Apply movement
-        controls.moveRight(-velocity.x * delta);
-        controls.moveForward(-velocity.z * delta);
+        // Move the camera based on keyboard input
+        if (moveForward) {
+            camera.position.x -= forwardX * speed * delta;
+            camera.position.z -= forwardZ * speed * delta;
+        }
+        if (moveBackward) {
+            camera.position.x += forwardX * speed * delta;
+            camera.position.z += forwardZ * speed * delta;
+        }
+        if (moveLeft) {
+            camera.position.x -= rightX * speed * delta;
+            camera.position.z -= rightZ * speed * delta;
+        }
+        if (moveRight) {
+            camera.position.x += rightX * speed * delta;
+            camera.position.z += rightZ * speed * delta;
+        }
 
         renderer.render(scene, camera);
     }
