@@ -74,6 +74,8 @@
     }
     createStarField();
 
+    // Keep a reference to the UFO so we can animate its movement later
+    let ufoMesh;
     // Build a more detailed UFO using composite geometries
     function createUFO() {
         const ufo = new THREE.Group();
@@ -112,6 +114,8 @@
         // Position the UFO deeper in the scene for exploration
         ufo.position.set(0, 2, -20);
         scene.add(ufo);
+        // Store reference for animation
+        ufoMesh = ufo;
     }
     createUFO();
 
@@ -138,19 +142,27 @@
         const coneGeom = new THREE.ConeGeometry(0.4, 1.2, 16);
         const coneMat = new THREE.MeshPhongMaterial({ color: 0xC68448 });
         const cone = new THREE.Mesh(coneGeom, coneMat);
+        // Flip the cone so its tip points downward and open end faces up
+        cone.rotation.x = Math.PI;
         cone.position.y = 0;
         group.add(cone);
-        // Scoop (random pastel colour)
-        const scoopGeom = new THREE.SphereGeometry(0.5, 16, 16);
+        // Scoop (random pastel colour) fits into the open end of the cone
+        // Make the scoop slightly smaller so it fits comfortably inside the cone
+        const scoopGeom = new THREE.SphereGeometry(0.35, 16, 16);
         const pastelColours = [0xffb347, 0xff6961, 0x77dd77, 0xcdb5cd, 0xfdfd96];
         const scoopColour = pastelColours[Math.floor(Math.random() * pastelColours.length)];
         const scoopMat = new THREE.MeshPhongMaterial({ color: scoopColour });
         const scoop = new THREE.Mesh(scoopGeom, scoopMat);
-        scoop.position.y = 0.8;
+        // Place the scoop inside the cone's open end; a lower y keeps it within the waffle
+        // Position the scoop so it sits properly inside the inverted cone's open end.
+        // After rotating the cone 180° around the x‑axis, the open end of the cone is located at y = +0.6.
+        // Place the scoop's centre slightly above this to tuck the scoop snugly into the cone.
+        scoop.position.y = 0.6;
         group.add(scoop);
-        // Set starting position and fall speed
+        // Set starting position and fall speed (much slower for a gentler rain)
         group.position.set(x, Math.random() * 15 + 10, z);
-        group.userData.velocity = Math.random() * 0.5 + 0.3;
+        // Assign a slower fall speed for a gentle ice‑cream rain
+        group.userData.velocity = Math.random() * 0.03 + 0.01;
         scene.add(group);
         iceCreams.push(group);
     }
@@ -307,16 +319,28 @@
                 }
             }
 
+            // Animate the UFO to fly across the scene if it exists
+            if (ufoMesh) {
+                const t = clock.elapsedTime * 0.3;
+                const radius = 40;
+                // Move in a wide circular path around the origin so the UFO passes overhead
+                ufoMesh.position.x = Math.sin(t) * radius;
+                ufoMesh.position.z = Math.cos(t) * radius;
+                // Vary the UFO's height to simulate a dynamic flight path
+                ufoMesh.position.y = 5 + Math.sin(t * 2) * 2;
+            }
+
             // Update falling ice creams each frame
             for (const ice of iceCreams) {
-                // Move downward based on velocity and delta
-                ice.position.y -= ice.userData.velocity * delta * 60;
+                // Move downward based on velocity and delta; use a smaller multiplier for a gentler motion
+                ice.position.y -= ice.userData.velocity * delta * 6;
                 // When an ice cream falls below the ground, respawn it above with a new position and speed
                 if (ice.position.y < -5) {
                     ice.position.x = (Math.random() - 0.5) * 100;
                     ice.position.z = (Math.random() - 0.5) * 100;
                     ice.position.y = Math.random() * 10 + 10;
-                    ice.userData.velocity = Math.random() * 0.5 + 0.3;
+                    // Reset velocity to a slow random value
+                    ice.userData.velocity = Math.random() * 0.03 + 0.01;
                 }
             }
 
