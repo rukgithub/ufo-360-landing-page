@@ -3,35 +3,208 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>UFO 360° Viewer</title>
-    <!-- Include Pannellum CSS -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.css" />
+    <title>UFO 3D Experience</title>
     <style>
-        body { margin: 0; font-family: Arial, sans-serif; background-color: #000; color: #fff; }
-        header { text-align: center; padding: 20px; }
-        #panorama { width: 100%; height: 80vh; }
-        .footer { text-align: center; padding: 20px; font-size: 14px; }
+        /* Reset margins and hide overflow for a full‑screen canvas */
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #000;
+            color: #fff;
+            font-family: Arial, sans-serif;
+        }
+        #overlay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 1;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 12px;
+            border-radius: 6px;
+        }
+        #overlay h1 {
+            margin: 0 0 4px 0;
+            font-size: 24px;
+        }
+        #overlay p {
+            margin: 0;
+            font-size: 14px;
+        }
     </style>
 </head>
 <body>
-    <header>
-        <h1>UFO 360° Viewer</h1>
-        <p>Explore a UFO scene in 360 degrees</p>
-    </header>
-    <div id="panorama"></div>
-    <div class="footer">
-        <p>Use your mouse or touch to look around the panorama.</p>
+    <!-- Overlay with instructions -->
+    <div id="overlay">
+        <h1>UFO 3D Experience</h1>
+        <p>Click to lock your pointer. Use WASD keys to move, and the mouse to look around.</p>
     </div>
-    <!-- Include Pannellum JS -->
-    <script src="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js"></script>
+    <!-- Three.js libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/PointerLockControls.js"></script>
     <script>
-        // Initialize the viewer
-        pannellum.viewer('panorama', {
-            "type": "equirectangular",
-            "panorama": "ufo360.png",
-            "autoLoad": true,
-            "title": "UFO 360 Scene"
-        });
+    // Create scene, camera and renderer
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x000000);
+
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
+    camera.position.set(0, 1.6, 5);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // Starfield: generate thousands of points to simulate stars
+    function createStarField() {
+        const starCount = 1500;
+        const geometry = new THREE.BufferGeometry();
+        const positions = new Float32Array(starCount * 3);
+        for (let i = 0; i < starCount; i++) {
+            positions[i * 3]     = (Math.random() - 0.5) * 2000;
+            positions[i * 3 + 1] = (Math.random() - 0.5) * 2000;
+            positions[i * 3 + 2] = (Math.random() - 0.5) * 2000;
+        }
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        const material = new THREE.PointsMaterial({ color: 0xffffff, size: 1 });
+        const stars = new THREE.Points(geometry, material);
+        scene.add(stars);
+    }
+    createStarField();
+
+    // Build a simple UFO using primitive shapes
+    function createUFO() {
+        const ufo = new THREE.Group();
+        // Main disc body: tapered cylinder
+        const bodyGeom = new THREE.CylinderGeometry(1.5, 0.5, 0.3, 32);
+        const bodyMat = new THREE.MeshPhongMaterial({ color: 0x5058ff, shininess: 80 });
+        const body = new THREE.Mesh(bodyGeom, bodyMat);
+        body.rotation.x = Math.PI / 2;
+        ufo.add(body);
+
+        // Dome on top: half sphere
+        const domeGeom = new THREE.SphereGeometry(0.6, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+        const domeMat = new THREE.MeshPhongMaterial({ color: 0x88aaff, transparent: true, opacity: 0.75 });
+        const dome = new THREE.Mesh(domeGeom, domeMat);
+        dome.position.y = 0.45;
+        ufo.add(dome);
+
+        // Glow ring: torus around the disc
+        const ringGeom = new THREE.TorusGeometry(1.2, 0.05, 16, 64);
+        const ringMat = new THREE.MeshBasicMaterial({ color: 0x00ffcc });
+        const ring = new THREE.Mesh(ringGeom, ringMat);
+        ring.rotation.x = Math.PI / 2;
+        ring.position.y = 0.05;
+        ufo.add(ring);
+
+        // Position the UFO slightly ahead of the starting point
+        ufo.position.set(0, 1, -12);
+        scene.add(ufo);
+    }
+    createUFO();
+
+    // Add lights
+    const ambientLight = new THREE.AmbientLight(0x404040, 2); // Soft ambient light
+    scene.add(ambientLight);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+    directionalLight.position.set(5, 10, 7.5);
+    scene.add(directionalLight);
+
+    // Ground plane to give a sense of scale and movement
+    const grid = new THREE.GridHelper(1000, 200, 0x444444, 0x222222);
+    grid.position.y = 0;
+    scene.add(grid);
+
+    // Set up pointer‑lock controls for first‑person navigation
+    const controls = new THREE.PointerLockControls(camera, document.body);
+    document.body.addEventListener('click', () => {
+        controls.lock();
+    });
+
+    // Movement flags
+    let moveForward = false;
+    let moveBackward = false;
+    let moveLeft = false;
+    let moveRight = false;
+
+    // Keyboard input handlers
+    function onKeyDown(event) {
+        switch (event.code) {
+            case 'ArrowUp':
+            case 'KeyW':
+                moveForward = true;
+                break;
+            case 'ArrowLeft':
+            case 'KeyA':
+                moveLeft = true;
+                break;
+            case 'ArrowDown':
+            case 'KeyS':
+                moveBackward = true;
+                break;
+            case 'ArrowRight':
+            case 'KeyD':
+                moveRight = true;
+                break;
+        }
+    }
+    function onKeyUp(event) {
+        switch (event.code) {
+            case 'ArrowUp':
+            case 'KeyW':
+                moveForward = false;
+                break;
+            case 'ArrowLeft':
+            case 'KeyA':
+                moveLeft = false;
+                break;
+            case 'ArrowDown':
+            case 'KeyS':
+                moveBackward = false;
+                break;
+            case 'ArrowRight':
+            case 'KeyD':
+                moveRight = false;
+                break;
+        }
+    }
+
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('keyup', onKeyUp);
+
+    // Physics variables for smooth movement
+    const velocity = new THREE.Vector3();
+    const direction = new THREE.Vector3();
+    const clock = new THREE.Clock();
+
+    function animate() {
+        requestAnimationFrame(animate);
+        const delta = clock.getDelta();
+
+        // Damp velocities
+        velocity.x -= velocity.x * 10.0 * delta;
+        velocity.z -= velocity.z * 10.0 * delta;
+
+        // Determine direction of movement
+        direction.z = Number(moveForward) - Number(moveBackward);
+        direction.x = Number(moveRight) - Number(moveLeft);
+        direction.normalize();
+
+        if (moveForward || moveBackward) velocity.z -= direction.z * 40.0 * delta;
+        if (moveLeft || moveRight) velocity.x -= direction.x * 40.0 * delta;
+
+        // Apply movement
+        controls.moveRight(-velocity.x * delta);
+        controls.moveForward(-velocity.z * delta);
+
+        renderer.render(scene, camera);
+    }
+    animate();
+
+    // Update aspect ratio and renderer size on window resize
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
     </script>
 </body>
 </html>
