@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UFO 360° Viewer</title>
+    <!-- Include Pannellum CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.css" />
+    <style>
+        body { margin: 0; font-family: Arial, sans-serif; background-color: #000; color: #fff; }
+        header { text-align: center; padding: 20px; }
+        #panorama { width: 100%; height: 80vh; }
+        .footer { text-align: center; padding: 20px; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>UFO 360° Viewer</h1>
+        <p>Explore a UFO scene in 360 degrees</p>
+    </header>
+    <div id="panorama"></div>
+    <div class="footer">
+        <p>Use your mouse or touch to look around the panorama.</p>
+    </div>
+    <!-- Include Pannellum JS -->
+    <script src="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js"></script>
+    <script>
+        // Initialize the viewer
+        pannellum.viewer('panorama', {
+            "type": "equirectangular",
+            "panorama": "ufo360.png",
+            "autoLoad": true,
+            "title": "UFO 360 Scene"
+        });
+    </script>
+</body>
+</html>
