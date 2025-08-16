@@ -38,10 +38,11 @@
         <h1>UFO 3D Experience</h1>
         <p>Click to lock your pointer. Use WASD keys to move, and the mouse to look around.</p>
     </div>
-    <!-- Three.js libraries -->
-    <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
-    <!-- PointerLockControls removed; custom implementation below -->
-    <script>
+    <!-- Use ES modules for Three.js and add WebXR support with VRButton -->
+    <script type="module">
+    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.154.0/build/three.module.js';
+    import { VRButton } from 'https://cdn.jsdelivr.net/npm/three@0.154.0/examples/jsm/webxr/VRButton.js';
+
     // Create scene, camera and renderer
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x000000);
@@ -51,7 +52,10 @@
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.xr.enabled = true; // Enable WebXR support
     document.body.appendChild(renderer.domElement);
+    // Add the VR button to enter VR mode when supported
+    document.body.appendChild(VRButton.createButton(renderer));
 
     // Starfield: generate thousands of points to simulate stars
     function createStarField() {
@@ -75,7 +79,7 @@
         const ufo = new THREE.Group();
         // Main disc body: tapered cylinder
         const bodyGeom = new THREE.CylinderGeometry(1.5, 0.5, 0.3, 32);
-        const bodyMat = new THREE.MeshPhongMaterial({ color: 0x5058ff, shininess: 80 });
+        const bodyMat = new THREE.MeshPhongMaterial({ color: 0x5b5eff, shininess: 80 });
         const body = new THREE.Mesh(bodyGeom, bodyMat);
         body.rotation.x = Math.PI / 2;
         ufo.add(body);
@@ -102,7 +106,7 @@
     createUFO();
 
     // Add lights
-    const ambientLight = new THREE.AmbientLight(0x404040, 2); // Soft ambient light
+    const ambientLight = new THREE.AmbientLight(0x404040, 2); // soft ambient light
     scene.add(ambientLight);
     const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
     directionalLight.position.set(5, 10, 7.5);
@@ -113,7 +117,7 @@
     grid.position.y = 0;
     scene.add(grid);
 
-    // Movement flags
+    // Movement flags (for desktop controls)
     let moveForward = false;
     let moveBackward = false;
     let moveLeft = false;
@@ -124,28 +128,26 @@
     let pitch = 0;
     let isPointerLocked = false;
 
-    // Request pointer lock when the user clicks anywhere on the page
+    // Pointer lock for desktop navigation
     document.body.addEventListener('click', () => {
-        document.body.requestPointerLock();
+        if (!renderer.xr.isPresenting) {
+            document.body.requestPointerLock();
+        }
     });
-
-    // Listen for pointer lock changes
     document.addEventListener('pointerlockchange', () => {
         isPointerLocked = document.pointerLockElement === document.body;
     });
-
-    // Update yaw and pitch when the mouse moves
     document.addEventListener('mousemove', (event) => {
-        if (!isPointerLocked) return;
+        if (!isPointerLocked || renderer.xr.isPresenting) return;
         const sensitivity = 0.002;
-        yaw   -= event.movementX * sensitivity;
+        yaw -= event.movementX * sensitivity;
         pitch -= event.movementY * sensitivity;
         const piHalf = Math.PI / 2;
         // Clamp pitch to avoid flipping
         pitch = Math.max(-piHalf, Math.min(piHalf, pitch));
     });
 
-    // Keyboard input handlers
+    // Keyboard input handlers for desktop
     document.addEventListener('keydown', (event) => {
         switch (event.code) {
             case 'ArrowUp':
@@ -191,38 +193,74 @@
     const clock = new THREE.Clock();
 
     function animate() {
-        requestAnimationFrame(animate);
-        const delta = clock.getDelta();
-        const speed = 8; // movement speed units per second
+        renderer.setAnimationLoop(() => {
+            const delta = clock.getDelta();
+            const speed = 8; // movement speed units per second
 
-        // Apply rotation to the camera
-        camera.rotation.set(pitch, yaw, 0);
+            // Only update manual rotation when not in VR
+            if (!renderer.xr.isPresenting) {
+                camera.rotation.set(pitch, yaw, 0);
+            }
 
-        // Calculate forward and right vectors based on current yaw
-        const forwardX = Math.sin(yaw);
-        const forwardZ = Math.cos(yaw);
-        const rightX   = Math.cos(yaw);
-        const rightZ   = -Math.sin(yaw);
+            // Calculate forward and right vectors based on current yaw (desktop controls)
+            const forwardX = Math.sin(yaw);
+            const forwardZ = Math.cos(yaw);
+            const rightX   = Math.cos(yaw);
+            const rightZ   = -Math.sin(yaw);
 
-        // Move the camera based on keyboard input
-        if (moveForward) {
-            camera.position.x -= forwardX * speed * delta;
-            camera.position.z -= forwardZ * speed * delta;
-        }
-        if (moveBackward) {
-            camera.position.x += forwardX * speed * delta;
-            camera.position.z += forwardZ * speed * delta;
-        }
-        if (moveLeft) {
-            camera.position.x -= rightX * speed * delta;
-            camera.position.z -= rightZ * speed * delta;
-        }
-        if (moveRight) {
-            camera.position.x += rightX * speed * delta;
-            camera.position.z += rightZ * speed * delta;
-        }
+            // Move the camera based on keyboard input (desktop)
+            if (!renderer.xr.isPresenting) {
+                if (moveForward) {
+                    camera.position.x -= forwardX * speed * delta;
+                    camera.position.z -= forwardZ * speed * delta;
+                }
+                if (moveBackward) {
+                    camera.position.x += forwardX * speed * delta;
+                    camera.position.z += forwardZ * speed * delta;
+                }
+                if (moveLeft) {
+                    camera.position.x -= rightX * speed * delta;
+                    camera.position.z -= rightZ * speed * delta;
+                }
+                if (moveRight) {
+                    camera.position.x += rightX * speed * delta;
+                    camera.position.z += rightZ * speed * delta;
+                }
+            }
 
-        renderer.render(scene, camera);
+            // If in VR, read controller joystick axes to move the camera
+            if (renderer.xr.isPresenting) {
+                const session = renderer.xr.getSession();
+                if (session) {
+                    const inputSources = session.inputSources;
+                    for (const source of inputSources) {
+                        if (source.gamepad && source.gamepad.axes) {
+                            const axes = source.gamepad.axes;
+                            // Many VR controllers use axes[2]/[3]; fallback to [0]/[1] if needed
+                            const xAxis = axes[2] !== undefined ? axes[2] : axes[0];
+                            const yAxis = axes[3] !== undefined ? axes[3] : axes[1];
+                            // Use current headset yaw for forward/right calculations
+                            const orientation = camera.getWorldQuaternion(new THREE.Quaternion());
+                            const euler = new THREE.Euler().setFromQuaternion(orientation, 'YXZ');
+                            const vrYaw = euler.y;
+                            const fx = Math.sin(vrYaw);
+                            const fz = Math.cos(vrYaw);
+                            const rx = Math.cos(vrYaw);
+                            const rz = -Math.sin(vrYaw);
+                            const vrSpeed = 4;
+                            // Forward/backward movement (yAxis inverted)
+                            camera.position.x -= fx * yAxis * vrSpeed * delta;
+                            camera.position.z -= fz * yAxis * vrSpeed * delta;
+                            // Left/right strafe movement
+                            camera.position.x += rx * xAxis * vrSpeed * delta;
+                            camera.position.z += rz * xAxis * vrSpeed * delta;
+                        }
+                    }
+                }
+            }
+
+            renderer.render(scene, camera);
+        });
     }
     animate();
 
