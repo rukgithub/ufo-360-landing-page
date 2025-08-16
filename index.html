@@ -36,7 +36,7 @@
     <!-- Overlay with instructions -->
     <div id="overlay">
         <h1>UFO 3D Experience</h1>
-        <p>Click to lock your pointer. Use WASD keys to move, and the mouse to look around.</p>
+        <p>Desktop: click to lock the pointer and use WASD to move. VR: click the VR button and use your controller’s joystick to explore the scene.</p>
     </div>
     <!-- Use ES modules for Three.js and add WebXR support with VRButton -->
     <script type="module">
@@ -74,33 +74,43 @@
     }
     createStarField();
 
-    // Build a simple UFO using primitive shapes
+    // Build a more detailed UFO using composite geometries
     function createUFO() {
         const ufo = new THREE.Group();
-        // Main disc body: tapered cylinder
-        const bodyGeom = new THREE.CylinderGeometry(1.5, 0.5, 0.3, 32);
-        const bodyMat = new THREE.MeshPhongMaterial({ color: 0x5b5eff, shininess: 80 });
+        // Main flared disc body
+        const bodyGeom = new THREE.CylinderGeometry(2.5, 4, 1, 32);
+        const bodyMat = new THREE.MeshPhongMaterial({ color: 0x6666aa, shininess: 80 });
         const body = new THREE.Mesh(bodyGeom, bodyMat);
         body.rotation.x = Math.PI / 2;
         ufo.add(body);
 
-        // Dome on top: half sphere
-        const domeGeom = new THREE.SphereGeometry(0.6, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
-        const domeMat = new THREE.MeshPhongMaterial({ color: 0x88aaff, transparent: true, opacity: 0.75 });
-        const dome = new THREE.Mesh(domeGeom, domeMat);
-        dome.position.y = 0.45;
-        ufo.add(dome);
+        // Translucent top dome
+        const topGeom = new THREE.SphereGeometry(2, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+        const topMat = new THREE.MeshPhongMaterial({ color: 0x8899ff, transparent: true, opacity: 0.8 });
+        const top = new THREE.Mesh(topGeom, topMat);
+        top.position.y = 0.7;
+        ufo.add(top);
 
-        // Glow ring: torus around the disc
-        const ringGeom = new THREE.TorusGeometry(1.2, 0.05, 16, 64);
-        const ringMat = new THREE.MeshBasicMaterial({ color: 0x00ffcc });
-        const ring = new THREE.Mesh(ringGeom, ringMat);
-        ring.rotation.x = Math.PI / 2;
-        ring.position.y = 0.05;
-        ufo.add(ring);
+        // Inverted bottom dome
+        const bottomGeom = new THREE.SphereGeometry(2.5, 32, 16, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
+        const bottomMat = new THREE.MeshPhongMaterial({ color: 0x444488 });
+        const bottom = new THREE.Mesh(bottomGeom, bottomMat);
+        bottom.position.y = -0.7;
+        ufo.add(bottom);
 
-        // Position the UFO slightly ahead of the starting point
-        ufo.position.set(0, 1, -12);
+        // Ring of glowing lights around the rim
+        const lightCount = 16;
+        for (let i = 0; i < lightCount; i++) {
+            const angle = (i / lightCount) * Math.PI * 2;
+            const lightGeom = new THREE.SphereGeometry(0.2, 16, 16);
+            const lightMat = new THREE.MeshBasicMaterial({ color: 0x00ffcc });
+            const light = new THREE.Mesh(lightGeom, lightMat);
+            light.position.set(Math.cos(angle) * 3.2, 0, Math.sin(angle) * 3.2);
+            ufo.add(light);
+        }
+
+        // Position the UFO deeper in the scene for exploration
+        ufo.position.set(0, 2, -20);
         scene.add(ufo);
     }
     createUFO();
@@ -113,9 +123,47 @@
     scene.add(directionalLight);
 
     // Ground plane to give a sense of scale and movement
-    const grid = new THREE.GridHelper(1000, 200, 0x444444, 0x222222);
+    // Use a larger grid so the user can wander farther
+    const grid = new THREE.GridHelper(2000, 400, 0x444444, 0x222222);
     grid.position.y = 0;
     scene.add(grid);
+
+    // Array to store falling ice cream cones
+    const iceCreams = [];
+
+    // Helper function to create a single ice cream cone at a random location
+    function createIceCream(x, z) {
+        const group = new THREE.Group();
+        // Cone base (waffle cone)
+        const coneGeom = new THREE.ConeGeometry(0.4, 1.2, 16);
+        const coneMat = new THREE.MeshPhongMaterial({ color: 0xC68448 });
+        const cone = new THREE.Mesh(coneGeom, coneMat);
+        cone.position.y = 0;
+        group.add(cone);
+        // Scoop (random pastel colour)
+        const scoopGeom = new THREE.SphereGeometry(0.5, 16, 16);
+        const pastelColours = [0xffb347, 0xff6961, 0x77dd77, 0xcdb5cd, 0xfdfd96];
+        const scoopColour = pastelColours[Math.floor(Math.random() * pastelColours.length)];
+        const scoopMat = new THREE.MeshPhongMaterial({ color: scoopColour });
+        const scoop = new THREE.Mesh(scoopGeom, scoopMat);
+        scoop.position.y = 0.8;
+        group.add(scoop);
+        // Set starting position and fall speed
+        group.position.set(x, Math.random() * 15 + 10, z);
+        group.userData.velocity = Math.random() * 0.5 + 0.3;
+        scene.add(group);
+        iceCreams.push(group);
+    }
+
+    // Populate the scene with many falling ice creams
+    function createIceCreamRain(count) {
+        for (let i = 0; i < count; i++) {
+            const x = (Math.random() - 0.5) * 100;
+            const z = (Math.random() - 0.5) * 100;
+            createIceCream(x, z);
+        }
+    }
+    createIceCreamRain(40);
 
     // Movement flags (for desktop controls)
     let moveForward = false;
@@ -195,7 +243,7 @@
     function animate() {
         renderer.setAnimationLoop(() => {
             const delta = clock.getDelta();
-            const speed = 8; // movement speed units per second
+            const speed = 12; // increased desktop movement speed (units per second)
 
             // Only update manual rotation when not in VR
             if (!renderer.xr.isPresenting) {
@@ -247,7 +295,7 @@
                             const fz = Math.cos(vrYaw);
                             const rx = Math.cos(vrYaw);
                             const rz = -Math.sin(vrYaw);
-                            const vrSpeed = 4;
+                            const vrSpeed = 6; // increased VR movement speed
                             // Forward/backward movement (yAxis inverted)
                             camera.position.x -= fx * yAxis * vrSpeed * delta;
                             camera.position.z -= fz * yAxis * vrSpeed * delta;
@@ -256,6 +304,19 @@
                             camera.position.z += rz * xAxis * vrSpeed * delta;
                         }
                     }
+                }
+            }
+
+            // Update falling ice creams each frame
+            for (const ice of iceCreams) {
+                // Move downward based on velocity and delta
+                ice.position.y -= ice.userData.velocity * delta * 60;
+                // When an ice cream falls below the ground, respawn it above with a new position and speed
+                if (ice.position.y < -5) {
+                    ice.position.x = (Math.random() - 0.5) * 100;
+                    ice.position.z = (Math.random() - 0.5) * 100;
+                    ice.position.y = Math.random() * 10 + 10;
+                    ice.userData.velocity = Math.random() * 0.5 + 0.3;
                 }
             }
 
